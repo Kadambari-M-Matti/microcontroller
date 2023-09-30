@@ -1,0 +1,126 @@
+// Define constants for display control
+#define REFRESH_INTERVAL 50ul
+#define SEGMENT_A 0x40
+#define SEGMENT_B 0x79
+#define SEGMENT_C 0x24
+#define SEGMENT_D 0x30
+#define SEGMENT_E 0x19
+#define SEGMENT_F 0x12
+#define SEGMENT_G 0x02
+#define SEGMENT_BLANK 0x7F
+
+// Define an array to store segment patterns for digits 0-9
+uint8_t SevenSegment[] = {SEGMENT_A, SEGMENT_B, SEGMENT_C,
+                          SEGMENT_D, SEGMENT_E, SEGMENT_F,
+                          SEGMENT_G, SEGMENT_BLANK, SEGMENT_BLANK,
+                          SEGMENT_BLANK};
+
+// Function to initialize the display pins
+void InitializeDisplay(void);
+
+// Function to display a single digit on the seven-segment display
+void DisplayDigit(uint8_t digit);
+
+void main()
+{
+    // Configuration settings
+    CMCON = 0x07;
+    ANSEL = 0x08;
+    TRISA |= 0x10;  // Set RA4/AN3 as Input
+    ADCON0 = 0x8D; // Right Justified, VDD, AN3 Selected, A/D Power-Up
+    ADCON1 = 0x10;
+    InitTimer0();
+    InitializeDisplay();
+    
+    while (1)
+    {
+        uint16_t adcValue = 0;
+        ADCON0 = 0x8D;
+        ADCON0bits.GO_DONE = 1; // Start Conversion
+        while (ADCON0bits.GO_DONE); // Wait for conversion
+        
+        adcValue = ADRESH << 8;
+        adcValue |= ADRESL;
+        adcValue = adcValue & 0x3FF;
+        adcValue = adcValue / 10;
+        
+        uint8_t digit1, digit2, digit3;
+        digit1 = adcValue % 10;
+        digit2 = (adcValue / 10) % 10;
+        digit3 = (adcValue / 100) % 10;
+        
+        // Display digit 1
+        PORTA &= 0xF8;
+        PORTA |= 0x04;
+        DisplayDigit(SevenSegment[digit1]);
+        __delay_ms(10);
+        
+        // Display digit 2
+        PORTA &= 0xF8;
+        PORTA |= 0x02;
+        DisplayDigit(SevenSegment[digit2]);
+        __delay_ms(10);
+        
+        // Display digit 3
+        PORTA &= 0xF8;
+        PORTA |= 0x01;
+        DisplayDigit(SevenSegment[digit3]);
+        __delay_ms(10);
+    }
+}
+
+// Function to initialize the display pins
+void InitializeDisplay(void)
+{
+    // Set control pins for the display
+    TRISA &= 0xD8; // RA0, RA1, RA2, RA5 as Output
+    TRISC = 0x00;
+    PORTA &= 0xD8;
+    PORTC = 0x00;
+}
+
+// Function to display a single digit on the seven-segment display
+void DisplayDigit(uint8_t code)
+{
+    /*  
+    * a -> RC0 (bit-0)  
+    * b -> RC3 (bit-1)  
+    * c -> RC5 (bit-2)  
+    * d -> RC4 (bit-3)  
+    * e -> RC2 (bit-4)  
+    * f -> RC1 (bit-5)  
+    * g -> RA5 (bit-6)  
+    */
+    PORTC = 0;
+    PORTA &= 0xDF;
+    
+    if (code == SEGMENT_BLANK)
+    {
+        PORTC = 0xFF;
+        PORTA |= 0x20;
+    }
+    else
+    {
+        // RC0
+        if (code & 0x01)
+            PORTC |= 0x01;
+        // RC3
+        if (code & 0x02)
+            PORTC |= 0x08;
+        // RC5
+        if (code & 0x04)
+            PORTC |= 0x20;
+        // RC4
+        if (code & 0x08)
+            PORTC |= 0x10;
+        // RC2
+        if (code & 0x10)
+            PORTC |= 0x04;
+        // RC1
+        if (code & 0x20)
+            PORTC |= 0x02;
+        // RA5
+        if (code & 0x40)
+            PORTA |= 0x20;
+    }
+}
